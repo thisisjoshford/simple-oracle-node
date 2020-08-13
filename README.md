@@ -1,4 +1,4 @@
-Hi Summa, NEAR thinks y'all are awesome.
+Forked from [mikedotexe/near-simple-oracle](https://github.com/mikedotexe/near-simple-oracle)
 
 `yarn`
 
