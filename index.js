@@ -1,28 +1,93 @@
 const nearAPI = require('near-api-js');
+const fetch = require("node-fetch");
 
-class BlockCheck {
+class Oracle {
   constructor() {
-    this.getBlock = this.getBlock.bind(this)
-    this.getBlock()
+    this.timedGrabber = this.timedGrabber.bind(this)
+    this.timedGrabber()
   }
 
-  async getBlock() {
+  async fetchPrice(url) {
+    const result = await fetch(url, {
+      method: 'GET',
+      cache: 'no-cache',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+    })
+    const jsonResult = await result.json()
+    console.log('json_result', jsonResult)
+    return Object.values(jsonResult)
+  }
+
+  async checkForRequests() {
     const config = {
       networkId: 'default',
       nodeUrl: 'https://rpc.testnet.near.org',
       walletUrl: 'https://wallet.testnet.near.org',
     }
 
-    const near = await nearAPI.connect(Object.assign(config, { deps: { keyStore: new nearAPI.keyStores.InMemoryKeyStore() }}));
-    const blockInfoByHeight = await near.connection.provider.block({
-      blockId: 11333262,
-    })
-    console.log('blockInfoByHeight', blockInfoByHeight)
-    const blockInfoByHash = await near.connection.provider.block({
-      blockId: '3xbs8thPsU1PppeB8qW49epYUA5jEBZinqWKePVuLSg1',
-    })
-    console.log('blockInfoByHash', blockInfoByHash)
-  };
-}
+    const clientId = 'client.dev.testnet'
+    const oracleId = 'oracle.dev.testnet'
+    const oracleNodeId = 'oracle-node.dev.testnet' // TODO change this and private key to function-call access key
+    const keyStore = new nearAPI.keyStores.InMemoryKeyStore()
+    const privateKey = 'ed25519:2YUhkcDR2ELZF61zR7mzNpaQaNHFGH1esyKswgBNzQEVqGHhficocSYzRMQQVF3s466EbzZaSugiZsk6mQ9UoBEQ'
+    const hardKeypair = nearAPI.KeyPair.fromString(privateKey);
+    await keyStore.setKey(config.networkId, oracleNodeId, hardKeypair);
+    const near = await nearAPI.connect(Object.assign({ deps: { keyStore: keyStore } }, config))
+    const oracleAccount = await near.account(oracleNodeId)
 
-new BlockCheck()
+    let requestCheck = await oracleAccount.functionCall(
+      oracleId,
+      'get_all_requests',
+      {
+        "max_num_accounts": "100",
+        "max_requests": "100"
+      }
+    )
+
+    if (requestCheck.status.SuccessValue) {
+      const decodedValue = Buffer.from(requestCheck.status.SuccessValue, 'base64').toString()
+      const jsonValue = JSON.parse(decodedValue)
+      if (Object.keys(jsonValue).length) {
+        const firstRequest = jsonValue[Object.keys(jsonValue)[0]]
+        if (firstRequest.length) {
+          const data = firstRequest[0].request.data
+          const nonce = firstRequest[0].nonce
+          console.log('nonce', nonce)
+          console.log('firstRequest[0].request', firstRequest[0].request)
+          const decodedData = Buffer.from(data, 'base64').toString()
+          const jsonData = JSON.parse(decodedData)
+          console.log('jsonData', jsonData)
+          const price = await this.fetchPrice(jsonData.get)
+          console.log('price', price)
+          const priceBase64 = Buffer.from(price.toString()).toString('base64')
+          console.log('priceBase64', priceBase64)
+          // fulfill
+          await oracleAccount.functionCall(
+            oracleId,
+            'fulfill_request',
+            {
+              "account": clientId,
+              "nonce": nonce,
+              "data": priceBase64
+            },
+            300000000000000
+          )
+        }
+      }
+    }
+
+  };
+
+  async timedGrabber() {
+    await this.checkForRequests();
+    if (this.timer !== null) {
+      this.timer = setTimeout(this.timedGrabber, 500);
+    }
+  };
+
+}
+console.log('Waiting for requests...')
+
+new Oracle()
