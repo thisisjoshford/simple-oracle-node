@@ -1,6 +1,8 @@
 const nearAPI = require('near-api-js');
 const fetch = require("node-fetch");
 
+const nearAcct = process.env.NEAR_ACCT
+
 class Oracle {
   constructor() {
     this.timedGrabber = this.timedGrabber.bind(this)
@@ -27,11 +29,12 @@ class Oracle {
       walletUrl: 'https://wallet.testnet.near.org',
     }
 
-    const clientId = 'client.dev.testnet'
-    const oracleId = 'oracle.dev.testnet'
-    const oracleNodeId = 'oracle-node.dev.testnet' // TODO change this and private key to function-call access key
+    const clientId = `client.${nearAcct}`
+    const oracleId = `oracle.${nearAcct}`
+    const oracleNodeId = `oracle-node.${nearAcct}` // TODO change this and private key to function-call access key
     const keyStore = new nearAPI.keyStores.InMemoryKeyStore()
-    const privateKey = 'ed25519:2YUhkcDR2ELZF61zR7mzNpaQaNHFGH1esyKswgBNzQEVqGHhficocSYzRMQQVF3s466EbzZaSugiZsk6mQ9UoBEQ'
+    //oracle-node privateKey
+    const privateKey = process.env.ORACLE_NODE_PRIVATE_KEY
     const hardKeypair = nearAPI.KeyPair.fromString(privateKey);
     await keyStore.setKey(config.networkId, oracleNodeId, hardKeypair);
     const near = await nearAPI.connect(Object.assign({ deps: { keyStore: keyStore } }, config))
